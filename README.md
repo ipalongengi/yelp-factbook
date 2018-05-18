@@ -24,7 +24,9 @@ This purpose of this project is to manage big data and obtain insights. The data
 * **Miguel Dominguez** - [Miguel75An](https://github.com/Miguel75An)
 
 ## Visuals
+
 <h1 align="center">
+Some Graphs Showing Facts and Insights
   <h3>Streets in Las Vegas city are generated using geolocation of Yelp Businesses.</h3>
   <a href="websitehere"><img src="https://raw.githubusercontent.com/Miguel75An/yelp-factbook/master/Lenny's%20Files/LV_map.png" alt="Yelp-Factbook"></a>
 </h1>
