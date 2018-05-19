@@ -1,4 +1,5 @@
 from pyspark import SparkContext
+from psyspark.sql import SparkSession
 
 def extract_review(pid, record):
     import csv
@@ -127,12 +128,52 @@ def find_overall_biz_stats(biz_rdd):
 
     top_business_rdd.saveAsTextFile('yelp_top_biz_cat')
 
+    ## What are the total number of business establishments in every city?
+    city_biz_sum = biz_rdd.map(lambda x: (x[4], 1)) \
+                           .reduceByKey(add) \
+                           .toDF()
+
+    city_biz_sum = city_biz_sum.select(city_biz_sum['_1'].alias('city'), city_biz_sum['_2'].alias('biz_total')).sort('biz_total', ascending=False)
+
+    total_biz_overall = city_biz_sum.select('biz_total').agg({'biz_total': 'sum'}).collect().pop()['sum(biz_total)']
+    print "The total number of businesses in the dataset is: %f\n" % total_biz_overall
+
+    city_biz_sum = city_biz_sum.withColumn('percentage', (city_biz_sum['biz_total'] / total_biz_overall) * 100)
+    city_biz_sum.rdd.saveAsTextFile('total_num_of_biz_by_city')
+
+    ## What are the total number of stars given for all records in the reviews dataset?
+    stars_sum = biz_rdd.map(lambda x: (x[9], 1)) \
+                       .reduceByKey(add) \
+                       .toDF()
+
+    stars_sum = stars_sum.select(stars_sum['_1'].alias('stars'), stars_sum['_2'].alias('total')).sort('total', ascending=False)
+    stars_sum.rdd.saveAsTextFile('total_num_stars')
+
+
+def review_counts_by_seasons(review_rdd, spark):
+    from operator import add
+
+    ## Find the number of reviews for each day for the holiday season and Valentine's season
+    review_dates_count_rdd = review_rdd.map(lambda x: x[4], 1) \
+                                       .reduceByKey(add) \
+                                       .cache()
+
+    dates_df = spark.createDataFrame(review_dates_count_rdd)
+    dates_df = dates_df.select(dates_df['_1'].cast('date').alias('date'), dates_df['_2'].alias('count'))
+    dates_df.createOrReplaceTempView('dates')
+
+    spark.sql("""SELECT * FROM dates WHERE MONTH(date) in (1, 12) ORDER by date""").rdd.saveAsTextFile('holiday_season_review_count')
+    spark.sql("""SELECT * FROM dates WHERE MONTH(date) in (2) ORDER by date""").rdd.saveAsTextFile('february_valentine_review_count')
+
+
 
 if __name__ == '__main__':
     REVIEW_FN = './yelp_reviews/yelp_review.csv'
     BIZ_FN = './yelp_reviews/yelp_business.csv'
 
+    spark = SparkSession.builder.appName("Yelp Factbook").getOrCreate()
     sc = SparkContext()
+
     cities = ['Phoenix', 'Las Vegas', 'Toronto', 'Charlotte', 'Stuttgart', 'Edinburgh']
 
     # Parse the reviews rdd
@@ -150,6 +191,9 @@ if __name__ == '__main__':
 
     # Find the statistics of the businesses dataset
     find_overall_biz_stats(biz_rdd)
+
+    # Get review counts for both holiday season and valentine season
+    review_counts_by_seasons(review_rdd, spark)
 
     # Generate the set of statistics for every city in the list
     for city in cities:
